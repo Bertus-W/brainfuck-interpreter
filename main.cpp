@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <deque>
@@ -182,6 +183,8 @@ void executeCommand(char *&memory, int *&jumps, char *&program,
 }
 
 int main(int _, char *argv[]) {
+  auto start = std::chrono::high_resolution_clock::now();
+
   std::string code = get_file_contents(argv[1]);
 
   char *memory = (char *)malloc(PROGRAM_SIZE * sizeof(char));
@@ -195,17 +198,18 @@ int main(int _, char *argv[]) {
   filterProgram(code.c_str(), program);
 
   // Precompute jump locations for loops
-  printf("Precompute Jumps...\n");
   int *jumps = (int *)malloc(PROGRAM_SIZE * sizeof(int));
   precomputeJumps(program, jumps, PROGRAM_SIZE);
 
-  printf("Running program...\n");
   while (*program) {
     executeCommand(memory, jumps, program, programStart);
     program++;
   }
-  printf("Done!\n");
 
   free(memoryStart);
   free(programStart);
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed = end - start;
+  printf("Program time: %.6f seconds\n", elapsed.count());
 }
