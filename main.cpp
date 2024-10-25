@@ -22,13 +22,12 @@ void filterProgram(const char *text, char *program) {
   std::string allowed = "><+-.,[]";
   while (*text) {
     if (allowed.find(*text) != std::string::npos) {
+      uint8_t dupes = 0;
       if (*text == '[' && *(text + 1) == '-' && *(text + 2) == ']') {
         *program = 'N';
         text++;
         text++;
       } else if (*text == '+') {
-        uint8_t dupes = 0;
-
         while (*text == '+') {
           dupes++;
           text++;
@@ -43,8 +42,6 @@ void filterProgram(const char *text, char *program) {
           *program = *text;
         }
       } else if (*text == '-') {
-        uint8_t dupes = 0;
-
         while (*text == '-') {
           dupes++;
           text++;
@@ -53,6 +50,34 @@ void filterProgram(const char *text, char *program) {
 
         if (dupes > 1) {
           *program = 'M';
+          program++;
+          *program = dupes;
+        } else {
+          *program = *text;
+        }
+      } else if (*text == '>') {
+        while (*text == '>') {
+          dupes++;
+          text++;
+        }
+        text--;
+
+        if (dupes > 1) {
+          *program = 'R';
+          program++;
+          *program = dupes;
+        } else {
+          *program = *text;
+        }
+      } else if (*text == '<') {
+        while (*text == '<') {
+          dupes++;
+          text++;
+        }
+        text--;
+
+        if (dupes > 1) {
+          *program = 'L';
           program++;
           *program = dupes;
         } else {
@@ -143,6 +168,14 @@ void executeCommand(char *&memory, int *&jumps, char *&program,
       break;
     case 'M':
       *memory -= program[1];
+      program++;
+      break;
+    case 'R':
+      memory += program[1];
+      program++;
+      break;
+    case 'L':
+      memory -= program[1];
       program++;
       break;
   }
