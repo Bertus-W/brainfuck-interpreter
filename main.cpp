@@ -1,185 +1,178 @@
-#include <iostream>
-#include <vector>
-#include <map>
-#include <fstream>
+#include <cstdint>
+#include <cstring>
 #include <deque>
+#include <fstream>
+#include <iostream>
+#include <map>
+#include <sstream>
+#include <unordered_map>
+#include <vector>
 
-#define BF_OP_VINC      '+'
-#define BF_OP_VDEC      '-'
-#define BF_OP_PINC      '>'
-#define BF_OP_PDEC      '<'
-#define BF_OP_LSTART    '['
-#define BF_OP_LEND      ']'
-#define BF_OP_IN        ','
-#define BF_OP_OUT       '.'
+#define PROGRAM_SIZE 30000
 
 std::string get_file_contents(const char *filename) {
-    std::FILE *fp = std::fopen(filename, "r");
-    if (fp) {
-        std::string contents;
-        std::fseek(fp, 0, SEEK_END);
-        contents.resize(std::ftell(fp));
-        std::rewind(fp);
-        std::fread(&contents[0], 1, contents.size(), fp);
-        std::fclose(fp);
-        return (contents);
-    }
-    throw (errno);
+  std::ifstream myfile(filename);
+  std::stringstream strStream;
+  strStream << myfile.rdbuf();
+  std::string content = strStream.str();
+  return content;
 }
 
-enum CommandType {
-    POINTER_INC,
-    POINTER_DEC,
-    VALUE_DEC,
-    VALUE_INC,
-    BRACK_LEFT,
-    BRACK_RIGHT,
-    CLEAR,
-    OUT,
-    IN,
-};
+void filterProgram(const char *text, char *program) {
+  std::string allowed = "><+-.,[]";
+  while (*text) {
+    if (allowed.find(*text) != std::string::npos) {
+      if (*text == '[' && *(text + 1) == '-' && *(text + 2) == ']') {
+        *program = 'N';
+        text++;
+        text++;
+      } else if (*text == '+') {
+        uint8_t dupes = 0;
 
-struct Command {
-    CommandType command_type;
-    unsigned int duplicates;
-    unsigned int pointer;
-};
-
-void compile(std::string code, Command (&result)[12000]) {
-    std::vector<unsigned int> temp_brackets = {};
-    std::vector<char> temp_chars = {};
-    int cur_command_row = -1;
-    unsigned int start;
-
-    unsigned int p = 0;
-    while (p < code.size()) {
-        if (cur_command_row == -1) {
-            cur_command_row = p;
+        while (*text == '+') {
+          dupes++;
+          text++;
         }
-        switch (code[p]) {
-            case BF_OP_PINC:
-                temp_chars.push_back(BF_OP_PINC);
-                if (code[p + 1] != BF_OP_PINC) {
-                    result[cur_command_row] = Command {POINTER_INC, static_cast<unsigned int>(temp_chars.size())};
-                    cur_command_row = -1;
-                    temp_chars.clear();
-                }
-                break;
-            case BF_OP_PDEC:
-                temp_chars.push_back(BF_OP_PDEC);
-                if (code[p + 1] != BF_OP_PDEC) {
-                    result[cur_command_row] = Command {POINTER_DEC, static_cast<unsigned int>(temp_chars.size())};
-                    cur_command_row = -1;
-                    temp_chars.clear();
-                }
-                break;
-            case BF_OP_VINC:
-                temp_chars.push_back(BF_OP_VINC);
-                if (code[p + 1] != BF_OP_VINC) {
-                    result[cur_command_row] = Command {VALUE_INC, static_cast<unsigned int>(temp_chars.size())};
-                    cur_command_row = -1;
-                    temp_chars.clear();
-                }
-                break;
-            case BF_OP_VDEC:
-                temp_chars.push_back(BF_OP_VDEC);
-                if (code[p + 1] != BF_OP_VDEC) {
-                    result[cur_command_row] = Command {VALUE_DEC, static_cast<unsigned int>(temp_chars.size())};
-                    cur_command_row = -1;
-                    temp_chars.clear();
-                }
-                break;
-            case BF_OP_LSTART:
-                if (code[p + 1] == '-' && code[p + 2] == ']') {
-                    result[p] = Command {CLEAR, 3};
-                    cur_command_row = -1;
-                    p += 2;
-                    break;
-                }
-                result[p] = Command {BRACK_LEFT, 1};
-                cur_command_row = -1;
-                temp_brackets.push_back(p);
-                break;
-            case BF_OP_LEND:
-                start = temp_brackets[temp_brackets.size() - 1];
-                temp_brackets.pop_back();
-                result[start].pointer = p;
-                result[p] = Command {BRACK_RIGHT, 1, start};
-                cur_command_row = -1;
-                break;
-            case BF_OP_OUT:
-                result[p] = Command {OUT, 1};
-                cur_command_row = -1;
-                break;
-            case BF_OP_IN:
-                result[p] = Command {IN, 1};
-                cur_command_row = -1;
-                break;
+        text--;
+
+        if (dupes > 1) {
+          *program = 'P';
+          program++;
+          *program = dupes;
+        } else {
+          *program = *text;
         }
-        p++;
+      } else if (*text == '-') {
+        uint8_t dupes = 0;
+
+        while (*text == '-') {
+          dupes++;
+          text++;
+        }
+        text--;
+
+        if (dupes > 1) {
+          *program = 'M';
+          program++;
+          *program = dupes;
+        } else {
+          *program = *text;
+        }
+      } else {
+        *program = *text;
+      }
+      program++;
     }
+    text++;
+  }
 }
 
-int main(int argc, char *argv[]) {
-    std::string code = get_file_contents(argv[1]);
-    code.erase(std::remove(code.begin(), code.end(), '\n'), code.end());
+// Function to precompute jump locations for loops
+void precomputeJumps(const char *program, int *jumps, int programSize) {
+  // Initialize jumps array with -1 to indicate no jump
+  for (int i = 0; i < programSize; i++) {
+    jumps[i] = -1;
+  }
 
-    std::vector<int> cells = {0};
-    unsigned int cell_pointer = 0;
-    unsigned int code_pointer = 0;
+  std::deque<int> stack;
+  int position = 0;
 
-    int code_size = (int) code.size();
+  while (program[position] != '\0') {
+    if (program[position] == '[') {
+      stack.push_back(position);
+    } else if (program[position] == ']') {
+      if (stack.empty()) {
+        std::cerr << "Unmatched ']' at position " << position << std::endl;
+        exit(1);
+      }
+      int matchingBracket = stack.back();
+      stack.pop_back();
 
-    Command compiled[12000] = {};
-    compile(code, compiled);
-
-    while (code_pointer < code_size) {
-        Command command = compiled[code_pointer];
-        int duplicates = command.duplicates;
-
-        switch (command.command_type) {
-            case POINTER_INC:
-                cell_pointer += duplicates;
-                if (cell_pointer >= cells.size()) {
-                    cells.resize(cell_pointer + 1);
-                }
-                break;
-            case POINTER_DEC:
-                cell_pointer -= duplicates;
-                break;
-            case VALUE_INC:
-                cells[cell_pointer] += duplicates;
-                if (cells[cell_pointer] > 255) {
-                    cells[cell_pointer] -= 255;
-                }
-                break;
-            case VALUE_DEC:
-                cells[cell_pointer] -= duplicates;
-                if (cells[cell_pointer] < 0) {
-                    cells[cell_pointer] += 255;
-                }
-                break;
-            case OUT:
-                std::printf("%c", cells[cell_pointer]);
-                break;
-            case CommandType::BRACK_LEFT:
-                if (cells[cell_pointer] == 0) {
-                    code_pointer = command.pointer;
-                }
-                break;
-            case BRACK_RIGHT:
-                if (cells[cell_pointer] != 0) {
-                    code_pointer = command.pointer;
-                }
-                break;
-            case CLEAR:
-                cells[cell_pointer] = 0;
-                break;
-            case IN:
-                cells[cell_pointer] = getchar();
-                break;
-        }
-        code_pointer += duplicates;
+      // Store the positions
+      jumps[matchingBracket] = position;
+      jumps[position] = matchingBracket;
     }
-    return 0;
+    position++;
+  }
+
+  if (!stack.empty()) {
+    std::cerr << "Unmatched '[' at position " << stack.back() << std::endl;
+    exit(1);
+  }
+}
+
+void executeCommand(char *&memory, int *&jumps, char *&program,
+                    char *programStart) {
+  int index = program - programStart;  // Explicitly cast to int
+
+  switch (*program) {
+    case '>':
+      memory++;
+      break;
+    case '<':
+      memory--;
+      break;
+    case '+':
+      (*memory)++;
+      break;
+    case '-':
+      (*memory)--;
+      break;
+    case '.':
+      putchar(*memory);
+      break;
+    case ',':
+      *memory = getchar();
+      break;
+    case '[':
+      if (*memory == 0) {
+        program = programStart + jumps[index];  // Jump forward to matching ]
+      }
+      break;
+    case ']':
+      if (*memory != 0) {
+        program = programStart + jumps[index];  // Jump back to matching [
+      }
+      break;
+    case 'N':
+      *memory = 0;
+      break;
+    case 'P':
+      *memory += program[1];
+      program++;
+      break;
+    case 'M':
+      *memory -= program[1];
+      program++;
+      break;
+  }
+}
+
+int main(int _, char *argv[]) {
+  std::string code = get_file_contents(argv[1]);
+
+  char *memory = (char *)malloc(PROGRAM_SIZE * sizeof(char));
+  char *program = (char *)malloc(PROGRAM_SIZE * sizeof(char));
+  char *programStart = program;  // Save the original pointer for free later
+  char *memoryStart = memory;    // Save the original pointer for free later
+
+  memset(memory, 0, PROGRAM_SIZE);
+  memset(program, 0, PROGRAM_SIZE);
+
+  filterProgram(code.c_str(), program);
+
+  // Precompute jump locations for loops
+  printf("Precompute Jumps...\n");
+  int *jumps = (int *)malloc(PROGRAM_SIZE * sizeof(int));
+  precomputeJumps(program, jumps, PROGRAM_SIZE);
+
+  printf("Running program...\n");
+  while (*program) {
+    executeCommand(memory, jumps, program, programStart);
+    program++;
+  }
+  printf("Done!\n");
+
+  free(memoryStart);
+  free(programStart);
 }
