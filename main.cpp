@@ -24,10 +24,31 @@ void filterProgram(const char *text, char *program) {
   while (*text) {
     if (allowed.find(*text) != std::string::npos) {
       uint8_t dupes = 0;
-      if (*text == '[' && *(text + 1) == '-' && *(text + 2) == ']') {
+
+      if (*text == '[' && *(text + 1) == '-' && *(text + 2) == ']' &&
+          *(text + 3) == '>') {
+        *program = 'C';
+        program++;
+        text += 4;
+        dupes = 1;
+
+        while (*text == '[' && *(text + 1) == '-' && *(text + 2) == ']' &&
+               *(text + 3) == '>') {
+          dupes += 1;
+          text += 4;
+        }
+        text--;
+
+        *program = dupes;
+      } else if (*text == '[' && *(text + 1) == '-' && *(text + 2) == ']') {
         *program = 'N';
         text++;
         text++;
+      } else if (*text == '[' && *(text + 1) == '-' && *(text + 2) == '>' &&
+                 *(text + 3) == '+' && *(text + 4) == '<' &&
+                 *(text + 5) == ']') {
+        *program = 'S';
+        text += 5;
       } else if (*text == '+') {
         while (*text == '+') {
           dupes++;
@@ -129,56 +150,59 @@ void precomputeJumps(const char *program, int *jumps, int programSize) {
 
 void executeCommand(char *&memory, int *&jumps, char *&program,
                     char *programStart) {
-  int index = program - programStart;  // Explicitly cast to int
+  int index = program - programStart; // Explicitly cast to int
 
   switch (*program) {
-    case '>':
-      memory++;
-      break;
-    case '<':
-      memory--;
-      break;
-    case '+':
-      (*memory)++;
-      break;
-    case '-':
-      (*memory)--;
-      break;
-    case '.':
-      putchar(*memory);
-      break;
-    case ',':
-      *memory = getchar();
-      break;
-    case '[':
-      if (*memory == 0) {
-        program = programStart + jumps[index];  // Jump forward to matching ]
-      }
-      break;
-    case ']':
-      if (*memory != 0) {
-        program = programStart + jumps[index];  // Jump back to matching [
-      }
-      break;
-    case 'N':
-      *memory = 0;
-      break;
-    case 'P':
-      *memory += program[1];
-      program++;
-      break;
-    case 'M':
-      *memory -= program[1];
-      program++;
-      break;
-    case 'R':
-      memory += program[1];
-      program++;
-      break;
-    case 'L':
-      memory -= program[1];
-      program++;
-      break;
+  case '>':
+    memory++;
+    break;
+  case '<':
+    memory--;
+    break;
+  case '+':
+    (*memory)++;
+    break;
+  case '-':
+    (*memory)--;
+    break;
+  case '.':
+    putchar(*memory);
+    break;
+  case ',':
+    *memory = getchar();
+    break;
+  case '[':
+    if (*memory == 0) {
+      program = programStart + jumps[index]; // Jump forward to matching ]
+    }
+    break;
+  case ']':
+    if (*memory != 0) {
+      program = programStart + jumps[index]; // Jump back to matching [
+    }
+    break;
+  case 'N':
+    *memory = 0;
+    break;
+  case 'P':
+    *memory += *(++program);
+    break;
+  case 'M':
+    *memory -= *(++program);
+    break;
+  case 'R':
+    memory += *(++program);
+    break;
+  case 'L':
+    memory -= *(++program);
+    break;
+  case 'S':
+    *(memory + 1) = *memory;
+    *memory = 0;
+    break;
+  case 'C':
+    memset(memory, 0, *(++program));
+    memory += *program;
   }
 }
 
@@ -189,8 +213,8 @@ int main(int _, char *argv[]) {
 
   char *memory = (char *)malloc(PROGRAM_SIZE * sizeof(char));
   char *program = (char *)malloc(PROGRAM_SIZE * sizeof(char));
-  char *programStart = program;  // Save the original pointer for free later
-  char *memoryStart = memory;    // Save the original pointer for free later
+  char *programStart = program; // Save the original pointer for free later
+  char *memoryStart = memory;   // Save the original pointer for free later
 
   memset(memory, 0, PROGRAM_SIZE);
   memset(program, 0, PROGRAM_SIZE);
